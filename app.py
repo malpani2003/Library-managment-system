@@ -1,76 +1,51 @@
-from typing import List,Annotated
-from fastapi import FastAPI,Path
-from pymongo import MongoClient
+from typing import List,Annotated,Optional
+from fastapi import FastAPI,Path,Query,status,HTTPException
 from bson.objectid import ObjectId
-from pydantic import BaseModel, validator
+from models.studentModel import Student
+from models.updateStudentModel import UpdatedStudent
+from db import collection
 
-app = FastAPI()
-url = ""
-client = MongoClient("localhost", 27017)
-databaseName = "library-managment-system"
-collectionName = "student"
+app = FastAPI() 
 
-if databaseName in client.list_database_names():
-    print("Database Already Exist")
-
-db = client[databaseName]
-collection = db[collectionName]
-
-class Student(BaseModel):
-    name: str
-    age: int
-    address: dict
-
-    @validator("address")
-    def validate_address(cls, value):
-        if not isinstance(value, dict):
-            raise ValueError("Address must be a dictionary")
-        if not all(key in value for key in ("city", "country")):
-            raise ValueError("Address must contain 'city' and 'country'")
-        return value
-
-@app.post("/student")
-def home(data:Student):
+# Route to Create Student
+@app.post("/students",status_code=status.HTTP_201_CREATED,description="API to create a student in the system. All fields are mandatory and required while creating the student in the system.")
+def create_students(data:Student):
     try:
-        # return data
-        student_data = Student(**data)
-        x = collection.insert_one(student_data.dict())
+        x = collection.insert_one(data.dict())
         return {"id": str(x.inserted_id)}
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=404, detail=str(e))
+    
 
-@app.get("/students/{id}")
-def read_student_by_id(id:str):
+# Route to Get Students Details based on _id
+@app.get("/students/{id}",status_code=status.HTTP_200_OK,description="sample response")
+def fetch_student(id:Annotated[str, Path(...,description="The ID of the student previously created.")]):
     try:
-        # return str(id)
         objInstance = ObjectId(id)
         studentData=collection.find_one({"_id":(objInstance)},{"_id":0})
-        if studentData:
-            return studentData
-        else:
-            return {"error":True,"msg":"No Student Present"}
+        return studentData
     except Exception as e:
-        return {"error":True,"msg":str(e)} 
+        raise HTTPException(status_code=404, detail=str(e))
 
-
-
-@app.get("/students")
-def read_student_by_id(country:str|None=None,age:int|None=0):
+# Route to Get Students based on Country and age value
+@app.get("/students",status_code=status.HTTP_200_OK,description=" An API to find a list of students. You can apply filters on this API by passing the query parameters as listed below")
+def list_students(country:str = Query(None, description="To apply filter of country. If not given or empty, this filter should be applied."), age: int = Query(None, description="Only records which have age greater than equal to the provided age should be present in the result. If not given or empty, this filter should be applied.")):
     try:
-        # return str(id)
-        if country is not None:
-            objInstance = ObjectId(id)
-            studentData=collection.find_one({"_id":(objInstance)},{"_id":0})
-            if studentData:
-                return studentData
-            else:
-                return {"error":True,"msg":"No Student Present"}
+        query = {}
+        if country:
+            query["address.country"] = country
+        if age:
+            query["age"] = {"$gte": age}
+
+        students = list(collection.find(query, {"_id": 0}))
+        return students
     except Exception as e:
-        return {"error":True,"msg":str(e)} 
+        raise HTTPException(status_code=404, detail=str(e))
+    
 
-
-@app.delete("/students/{id}")
-def delet_student_by_id(id:str):
+# Route to Delete Students Details
+@app.delete("/students/{id}",status_code=status.HTTP_200_OK)
+def delete_student(id: str = Path(...)):
     try:
         # return str(id)
         objInstance = ObjectId(id)
@@ -79,29 +54,27 @@ def delet_student_by_id(id:str):
             collection.delete_one({"_id":objInstance})
             return {}
         else:
-            return {"error":True,"msg":"No Student Present"}
+            raise HTTPException(status_code=404, detail="No Student Present")
     except Exception as e:
-        return str(e) 
+        raise HTTPException(status_code=404, detail=str(e))
 
-@app.patch("/students/{id}")
-def update_student_by_id(id:str,update_obj2:object| None):
+# Route to Updated Student Details
+@app.patch("/students/{id}",status_code=status.HTTP_204_NO_CONTENT,description="API to update the student's properties based on information provided. Not mandatory that all information would be sent in PATCH, only what fields are sent should be updated in the Database")
+def update_student(id: str = Path(...),update_obj2:UpdatedStudent=None):
     try:
-        # return str(id)
-        update_obj=update_obj2.dict()
+        if update_obj2 is not None:
+            update_obj=update_obj2.dict()
+        else:
+            update_obj={}
+
         objInstance = ObjectId(id)
+        
+        # Update the Data 
         studentData=collection.find_one({"_id":(objInstance)},{"_id":0})
         if studentData:
             collection.update_one({"_id":objInstance},{"$set":update_obj}) 
             return {}
         else:
-            return {"error":True,"msg":"No Student Present"}
+            raise HTTPException(status_code=404, detail="No Student Present")
     except Exception as e:
-        return str(e) 
-
-@app.get("/students", response_model=List[Student])
-def read_students():
-    try:
-        students = list(collection.find({}, {"_id": 0}))
-        return students
-    except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=404, detail=str(e))
