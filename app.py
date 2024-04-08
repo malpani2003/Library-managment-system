@@ -14,7 +14,7 @@ def create_students(data:Student):
         x = collection.insert_one(data.dict())
         return {"id": str(x.inserted_id)}
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     
 
 # Route to Get Students Details based on _id
@@ -25,7 +25,7 @@ def fetch_student(id:Annotated[str, Path(...,description="The ID of the student 
         studentData=collection.find_one({"_id":(objInstance)},{"_id":0})
         return studentData
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Route to Get Students based on Country and age value
 @app.get("/students",status_code=status.HTTP_200_OK,description=" An API to find a list of students. You can apply filters on this API by passing the query parameters as listed below")
@@ -40,7 +40,7 @@ def list_students(country:str = Query(None, description="To apply filter of coun
         students = list(collection.find(query, {"_id": 0}))
         return students
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     
 
 # Route to Delete Students Details
@@ -56,25 +56,38 @@ def delete_student(id: str = Path(...)):
         else:
             raise HTTPException(status_code=404, detail="No Student Present")
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
+        raise HTTPException(status_code=500, detail=str(e))
 # Route to Updated Student Details
-@app.patch("/students/{id}",status_code=status.HTTP_204_NO_CONTENT,description="API to update the student's properties based on information provided. Not mandatory that all information would be sent in PATCH, only what fields are sent should be updated in the Database")
-def update_student(id: str = Path(...),update_obj2:UpdatedStudent=None):
+@app.patch("/students/{id}", status_code=status.HTTP_204_NO_CONTENT, description="API to update the student's properties based on information provided. Not mandatory that all information would be sent in PATCH, only what fields are sent should be updated in the Database")
+def update_student(id: str = Path(...), update_obj2: UpdatedStudent = None):
     try:
         if update_obj2 is not None:
-            update_obj=update_obj2.dict()
+            update_obj = update_obj2.dict(exclude_unset=True)
         else:
-            update_obj={}
+            update_obj = {}
 
         objInstance = ObjectId(id)
-        
-        # Update the Data 
-        studentData=collection.find_one({"_id":(objInstance)},{"_id":0})
+
+        # Find Student if present or not
+        studentData = collection.find_one({"_id": objInstance}, {"_id": 0})
         if studentData:
-            collection.update_one({"_id":objInstance},{"$set":update_obj}) 
+            # If present then check which values are absent or present and update with older one if not present
+            if "name" not in update_obj:
+                update_obj["name"] = studentData.get("name")
+            if "age" not in update_obj:
+                update_obj["age"] = studentData.get("age")
+            if "address" not in update_obj:
+                update_obj["address"] = studentData.get("address", {})
+            else:
+                address = update_obj.get("address", {})
+                update_obj["address"] = {
+                    "city": address.get("city", studentData["address"].get("city")),
+                    "country": address.get("country", studentData["address"].get("country"))
+                }
+
+            collection.update_one({"_id": objInstance}, {"$set": update_obj}) 
             return {}
         else:
             raise HTTPException(status_code=404, detail="No Student Present")
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
