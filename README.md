@@ -1,6 +1,6 @@
 ### Steps for Steps
 * Clone the git repository:
-  - `git clone <url-of-git-repo>`
+  - `git clone https://github.com/malpani2003/Library-managment-system.git`
 * Setup virtual environment for development:
   - `python -m venv <name-of-virtual-env>`
 * Activate virtual environment
