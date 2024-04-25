@@ -38,7 +38,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         else:
             # Not exist then generate error s response
-            response = Response({"error":"No user_id header present"}, status_code=400)
+            response = Response("No user_id header present", status_code=400)
         return response
 
     def change_rate_limit(self, user_id: str):
